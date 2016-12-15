@@ -3,9 +3,9 @@ package training.check;
 import com.intellij.lang.ASTNode;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
-import com.intellij.psi.JavaTokenType;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
+import training.learn.ide.IProductBuilder;
 
 /**
  * Created by karashevich on 21/08/15.
@@ -38,7 +38,6 @@ public class CheckCountCommentedLines implements Check{
     }
 
     public int countCommentedLines(){
-
         final PsiElement psiElement = PsiDocumentManager.getInstance(project).getPsiFile(editor.getDocument());
         ASTNode astNode = psiElement.getNode();
         while (astNode.getTreeParent() != null) {
@@ -48,8 +47,10 @@ public class CheckCountCommentedLines implements Check{
     }
 
     private int calc(PsiElement psiElement){
+        IProductBuilder productBuilder = IProductBuilder.create();
+        //TODO: singleton
 
-        if (psiElement.getNode().getElementType() == JavaTokenType.END_OF_LINE_COMMENT) return 1;
+        if (psiElement.getNode().getElementType() == productBuilder.getEndOfLineComment()) return 1;
         else if(psiElement.getChildren().length == 0) return 0;
         else {
             int result = 0;
@@ -59,4 +60,5 @@ public class CheckCountCommentedLines implements Check{
             return result;
         }
     }
+
 }

@@ -1,7 +1,5 @@
 package training.actions;
 
-import com.intellij.CommonBundle;
-import com.intellij.ide.RecentProjectsManager;
 import com.intellij.ide.scratch.ScratchFileService;
 import com.intellij.ide.scratch.ScratchRootType;
 import com.intellij.lang.Language;
@@ -10,13 +8,9 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DataKey;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.*;
-import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
-import com.intellij.openapi.projectRoots.*;
-import com.intellij.openapi.projectRoots.impl.JavaSdkImpl;
 import com.intellij.openapi.roots.ProjectRootManager;
-import com.intellij.openapi.roots.impl.LanguageLevelProjectExtensionImpl;
 import com.intellij.openapi.roots.ui.configuration.ProjectSettingsService;
 import com.intellij.openapi.startup.StartupManager;
 import com.intellij.openapi.ui.Messages;
@@ -24,27 +18,23 @@ import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
-import com.intellij.pom.java.LanguageLevel;
-import com.intellij.util.JdkBundle;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import training.learn.*;
 import training.learn.dialogs.SdkModuleProblemDialog;
 import training.learn.dialogs.SdkProjectProblemDialog;
 import training.learn.exceptons.*;
+import training.learn.ide.IDEAProductBuilder;
+import training.learn.ide.IProductBuilder;
 import training.ui.LearnToolWindowFactory;
-import training.util.JdkSetupUtil;
 import training.util.MyClassLoader;
 
 import java.awt.*;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.Scanner;
 import java.util.concurrent.ExecutionException;
 
-import static com.intellij.projectImport.ProjectImportBuilder.getCurrentProject;
-import static training.learn.CourseManager.LEARN_PROJECT_NAME;
 
 /**
  * Created by karashevich on 20/05/16.
@@ -59,13 +49,14 @@ public class OpenLessonAction extends AnAction {
 
         final Lesson lesson = e.getData(LESSON_DATA_KEY);
         final Project project = e.getProject();
+        final IProductBuilder productBuilder = IProductBuilder.create();
 
         try {
             if (lesson != null) {
                 openLesson(project, lesson);
             } else {
                 //in case of starting from Welcome Screen
-                Project myLearnProject = initLearnProject(null);
+                Project myLearnProject = productBuilder.initLearnProject(null);
                 assert myLearnProject != null;
                 openLearnToolWindowAndShowModules(myLearnProject);
             }
@@ -87,26 +78,27 @@ public class OpenLessonAction extends AnAction {
 
             final Project myProject = project;
             final String scratchFileName = "Learning";
+            final IProductBuilder productBuilder = IProductBuilder.create();
             VirtualFile vf = null;
             final Project learnProject = CourseManager.getInstance().getLearnProject();
             if (lesson.getModule().moduleType == Module.ModuleType.SCRATCH) {
-                CourseManager.getInstance().checkEnvironment(project, lesson.getModule());
+                productBuilder.checkEnvironment(project, lesson.getModule());
                 vf = getScratchFile(myProject, lesson, scratchFileName);
             } else {
                 //0. learnProject == null but this project is LearnProject then just getFileInLearnProject
-                if (learnProject == null && getCurrentProject().getName().equals(LEARN_PROJECT_NAME)) {
+                if (learnProject == null && getCurrentProject().getName().equals(productBuilder.getLearnProjectName())) {
                     CourseManager.getInstance().setLearnProject(getCurrentProject());
                     vf = getFileInLearnProject(lesson);
 
                     //1. learnProject == null and current project has different name then initLearnProject and register post startup open lesson
-                } else if (learnProject == null && !getCurrentProject().getName().equals(LEARN_PROJECT_NAME)) {
-                    Project myLearnProject = initLearnProject(myProject);
+                } else if (learnProject == null && !getCurrentProject().getName().equals(productBuilder.getLearnProjectName())) {
+                    Project myLearnProject = productBuilder.initLearnProject(myProject);
                     if (myLearnProject == null) return; // in case of user aborted to create a LearnProject
                     openLessonWhenLearnProjectStart(lesson, myLearnProject);
                     return;
                     //2. learnProject != null and learnProject is disposed then reinitProject and getFileInLearnProject
                 } else if (learnProject.isDisposed()) {
-                    Project myLearnProject = initLearnProject(myProject);
+                    Project myLearnProject = productBuilder.initLearnProject(myProject);
                     if (myLearnProject == null) return; // in case of user aborted to create a LearnProject
                     openLessonWhenLearnProjectStart(lesson, myLearnProject);
                     return;
@@ -208,6 +200,10 @@ public class OpenLessonAction extends AnAction {
         }
     }
 
+    private Project getCurrentProject() {
+        return ProjectManager.getInstance().getOpenProjects()[0];
+    }
+
     private void openLearnToolWindowAndShowModules(@NotNull Project myLearnProject) {
         if (myLearnProject.isOpen() && myLearnProject.isInitialized()) {
             showModules(myLearnProject);
@@ -250,7 +246,7 @@ public class OpenLessonAction extends AnAction {
         VirtualFile vf = null;
         assert lesson != null;
         assert lesson.getModule() != null;
-        String myLanguage = lesson.getLang() != null ? lesson.getLang() : "JAVA";
+        String myLanguage = lesson.getLang() != null ? lesson.getLang() : "Swift";
 
         final Language languageByID = Language.findLanguageByID(myLanguage);
         if (CourseManager.getInstance().mapModuleVirtualFile.containsKey(lesson.getModule())) {
@@ -291,15 +287,17 @@ public class OpenLessonAction extends AnAction {
 
         return ApplicationManager.getApplication().runWriteAction((Computable<VirtualFile>) () -> {
             final Project learnProject = CourseManager.getInstance().getLearnProject();
+            final IProductBuilder builder = IProductBuilder.create();
             assert learnProject != null;
+
             final VirtualFile sourceRootFile = ProjectRootManager.getInstance(learnProject).getContentSourceRoots()[0];
-            String fileName = "Test.java";
+
+            String fileName = builder.getScratchName();
             if (lesson.getModule() != null) {
-                String extensionFile = ".java";
+                String extensionFile = builder.getScratchExtension();
                 if (lesson.getLang() != null) extensionFile = "." + lesson.getLang().toLowerCase();
                 fileName = lesson.getModule().getNameWithoutWhitespaces() + extensionFile;
             }
-
             VirtualFile lessonVirtualFile = sourceRootFile.findChild(fileName);
             if (lessonVirtualFile == null) {
 
@@ -313,133 +311,6 @@ public class OpenLessonAction extends AnAction {
             CourseManager.getInstance().registerVirtualFile(lesson.getModule(), lessonVirtualFile);
             return lessonVirtualFile;
         });
-    }
-
-    @Nullable
-    private Project initLearnProject(Project projectToClose) {
-        Project myLearnProject = null;
-
-        //if projectToClose is open
-        final Project[] openProjects = ProjectManager.getInstance().getOpenProjects();
-        for (Project openProject : openProjects) {
-            final String name = openProject.getName();
-            if (name.equals(LEARN_PROJECT_NAME)) {
-                myLearnProject = openProject;
-                if (ApplicationManager.getApplication().isUnitTestMode()) return openProject;
-            }
-        }
-        if (myLearnProject == null || myLearnProject.getProjectFile() == null) {
-
-            if (!ApplicationManager.getApplication().isUnitTestMode() && projectToClose != null)
-                if (!NewLearnProjectUtil.showDialogOpenLearnProject(projectToClose))
-                    return null; //if user abort to open lesson in a new Project
-            if (CourseManager.getInstance().getLearnProjectPath() != null) {
-                try {
-                    myLearnProject = ProjectManager.getInstance().loadAndOpenProject(CourseManager.getInstance().getLearnProjectPath());
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            } else {
-                try {
-                    final Sdk newJdk = getJavaSdkInWA();
-                    myLearnProject = NewLearnProjectUtil.createLearnProject(LEARN_PROJECT_NAME, projectToClose, newJdk);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            //Set language level for LearnProject
-            LanguageLevelProjectExtensionImpl.getInstanceImpl(myLearnProject).setCurrentLevel(LanguageLevel.JDK_1_6);
-        }
-
-        if (myLearnProject != null) {
-
-            CourseManager.getInstance().setLearnProject(myLearnProject);
-
-            assert CourseManager.getInstance().getLearnProject() != null;
-            assert CourseManager.getInstance().getLearnProject().getProjectFile() != null;
-            assert CourseManager.getInstance().getLearnProject().getProjectFile().getParent() != null;
-            assert CourseManager.getInstance().getLearnProject().getProjectFile().getParent().getParent() != null;
-
-            CourseManager.getInstance().setLearnProjectPath(CourseManager.getInstance().getLearnProject().getBasePath());
-            //Hide LearnProject from Recent projects
-            RecentProjectsManager.getInstance().removePath(CourseManager.getInstance().getLearnProject().getPresentableUrl());
-
-            return myLearnProject;
-        }
-
-        return null;
-
-    }
-
-    @NotNull
-    private Sdk getJavaSdkInWA() {
-        final Sdk newJdk;
-        if (ApplicationManager.getApplication().isUnitTestMode()) {
-            newJdk = ApplicationManager.getApplication().runWriteAction((Computable<Sdk>) () -> {
-                return getJavaSdk();
-            });
-        } else {
-            newJdk = getJavaSdk();
-        }
-        return newJdk;
-    }
-
-    @NotNull
-    private Sdk getJavaSdk() {
-
-        //check for stored jdk
-        ArrayList<Sdk> jdkList = getJdkList();
-        if (!jdkList.isEmpty()) {
-            for (Sdk sdk : jdkList) {
-                if (JavaSdk.getInstance().getVersion(sdk)!= null && JavaSdk.getInstance().getVersion(sdk).isAtLeast(JavaSdkVersion.JDK_1_6)) {
-                    return sdk;
-                }
-            }
-        }
-
-        //if no predefined jdks -> add bundled jdk to available list and return it
-        JavaSdk javaSdk = JavaSdk.getInstance();
-
-        ArrayList<JdkBundle> bundleList = JdkSetupUtil.findJdkPaths().toArrayList();
-        //we believe that Idea has at least one bundled jdk
-        JdkBundle jdkBundle = bundleList.get(0);
-        String jdkBundleLocation = JdkSetupUtil.getJavaHomePath(jdkBundle);
-        String jdk_name = "JDK_" + jdkBundle.getVersion().toString();
-        final Sdk newJdk = javaSdk.createJdk(jdk_name, jdkBundleLocation, false);
-
-        final Sdk foundJdk = ProjectJdkTable.getInstance().findJdk(newJdk.getName(), newJdk.getSdkType().getName());
-        if (foundJdk == null) {
-            ApplicationManager.getApplication().runWriteAction(() -> {
-                ProjectJdkTable.getInstance().addJdk(newJdk);
-            });
-        }
-        ApplicationManager.getApplication().runWriteAction(() -> {
-            SdkModificator modificator = newJdk.getSdkModificator();
-            JavaSdkImpl.attachJdkAnnotations(modificator);
-            modificator.commitChanges();
-        });
-        return newJdk;
-
-    }
-
-
-    @NotNull
-    public static ArrayList<Sdk> getJdkList() {
-
-        ArrayList<Sdk> compatibleJdks = new ArrayList<>();
-
-        SdkType type = JavaSdk.getInstance();
-        final Sdk[] allJdks = ProjectJdkTable.getInstance().getAllJdks();
-        for (Sdk projectJdk : allJdks) {
-            if (isCompatibleJdk(projectJdk, type)) {
-                compatibleJdks.add(projectJdk);
-            }
-        }
-        return compatibleJdks;
-    }
-
-    private static boolean isCompatibleJdk(final Sdk projectJdk, final @Nullable SdkType type) {
-        return type == null || projectJdk.getSdkType() == type;
     }
 
 }

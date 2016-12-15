@@ -229,7 +229,7 @@ public class Module{
         return name.replaceAll("\\s+", "");
     }
 
-    ModuleSdkType getSdkType() {
+    public ModuleSdkType getSdkType() {
          return mySdkType;
     }
 

@@ -42,6 +42,7 @@ intellij{
         username repoUser
         password repoPassword
     }
+    alternativeIdePath = '/Applications/AppCode.app'
 }
 
 sourceSets {

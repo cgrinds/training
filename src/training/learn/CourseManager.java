@@ -8,10 +8,7 @@ import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext;
 import com.intellij.openapi.components.*;
-import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.projectRoots.*;
-import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.IdeFocusManager;
 import com.intellij.openapi.wm.IdeFrame;
@@ -22,7 +19,8 @@ import org.jdom.JDOMException;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import training.actions.OpenLessonAction;
-import training.learn.exceptons.*;
+import training.learn.exceptons.BadLessonException;
+import training.learn.exceptons.BadModuleException;
 import training.learn.log.GlobalLessonLog;
 import training.ui.*;
 import training.util.GenModuleXml;
@@ -48,7 +46,6 @@ public class CourseManager implements PersistentStateComponent<CourseManager.Sta
 
     private Project learnProject;
     private LearnPanel myLearnPanel;
-    public final static String LEARN_PROJECT_NAME = "LearnProject";
     private MainLearnPanel mainLearnPanel;
     public static final String NOTIFICATION_ID = "Training plugin";
 
@@ -142,55 +139,6 @@ public class CourseManager implements PersistentStateComponent<CourseManager.Sta
         if (lastFocusedFrame == null) return null;
         return lastFocusedFrame.getProject();
     }
-
-
-    /**
-     * checking environment to start learning plugin. Checking SDK.
-     *
-     * @param project where lesson should be started
-     * @param module  learning module
-     * @throws OldJdkException     - if project JDK version is not enough for this module
-     * @throws InvalidSdkException - if project SDK is not suitable for module
-     */
-    public void checkEnvironment(Project project, @Nullable Module module) throws OldJdkException, InvalidSdkException, NoSdkException, NoJavaModuleException {
-
-        if (module == null) return;
-
-        final Sdk projectJdk = ProjectRootManager.getInstance(project).getProjectSdk();
-        if (projectJdk == null) throw new NoSdkException();
-
-        final SdkTypeId sdkType = projectJdk.getSdkType();
-        if (module.getSdkType() == Module.ModuleSdkType.JAVA) {
-            if (sdkType instanceof JavaSdk) {
-                final JavaSdkVersion version = ((JavaSdk) sdkType).getVersion(projectJdk);
-                if (version != null) {
-                    if (!version.isAtLeast(JavaSdkVersion.JDK_1_6)) throw new OldJdkException(JavaSdkVersion.JDK_1_6);
-                    try {
-                        checkJavaModule(project);
-                    } catch (NoJavaModuleException e) {
-                        throw e;
-                    }
-                }
-            } else if (sdkType.getName().equals("IDEA JDK")) {
-                try {
-                    checkJavaModule(project);
-                } catch (NoJavaModuleException e) {
-                    throw e;
-                }
-            } else {
-                throw new InvalidSdkException("Please use at least JDK 1.6 or IDEA SDK with corresponding JDK");
-            }
-        }
-    }
-
-    private void checkJavaModule(Project project) throws NoJavaModuleException {
-
-        if (ModuleManager.getInstance(project).getModules().length == 0) {
-            throw new NoJavaModuleException();
-        }
-
-    }
-
 
     @Nullable
     public Lesson findLesson(String lessonName) {

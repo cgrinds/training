@@ -1,21 +1,15 @@
 package training.learn.exceptons;
 
-import com.intellij.openapi.projectRoots.JavaSdkVersion;
-
 /**
  * Created by karashevich on 09/09/15.
  */
 public class OldJdkException extends Exception {
 
-    public OldJdkException(String s) {
-        super(s);
-    }
-
-    public OldJdkException(JavaSdkVersion javaSdkVersion) {
+    public OldJdkException(String javaSdkVersion) {
         super(" Old Java SDK version for Project SDK.");
     }
 
-    public OldJdkException(JavaSdkVersion javaSdkVersion, JavaSdkVersion atLeastVersion) {
-        super(" Old Java SDK version for Project SDK. Please use version " + atLeastVersion.toString());
+    public OldJdkException(String javaSdkVersion, String atLeastVersion) {
+        super(" Old Java SDK version for Project SDK. Please use version " + atLeastVersion);
     }
 }
